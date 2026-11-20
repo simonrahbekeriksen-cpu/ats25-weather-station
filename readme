@@ -1,0 +1,10 @@
+ATS25 Weather Station - prototype v0.1
+
+Åbn index.html via en HTTPS-webserver for mikrofonadgang på iPhone. En lokal file://-åbning er ikke tilstrækkelig.
+
+STATUS:
+- WEFAX: eksperimentel lyd-FM-demodulation, manuel billedstart, 120/60/240 LPM, PNG-eksport. APT-start/stop og IOC-synkronisering mangler; billedkvalitet skal verificeres med virkelige transmissioner.
+- RTTY: eksperimentel AFSK/ITA2-dekoder, justerbar baud og shift. Clock recovery er simpel; skal verificeres.
+- NAVTEX: kun rå 7-bit-grupper til diagnostik. IKKE en komplet SITOR-B/CCIR476/FEC-dekoder.
+- Offline: én HTML-fil uden eksterne afhængigheder. Kan køre offline, når den er hentet, men installation og vedvarende offline-cache på iOS er endnu ikke implementeret. HTTPS nødvendig for mikrofon.
+- Brug ikke til navigationssikkerhed eller nødkommunikation.
