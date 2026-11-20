@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d2637"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>ATS25 Weather Station v0.4</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;background:#071b29;color:#edf7fc}*{box-sizing:border-box}body{margin:0}header{background:#102b3c;border-bottom:1px solid #335368;padding:13px 16px 15px}.wrap,.inner{margin:auto;max-width:810px}.wrap{padding:12px 12px 38px}h1{font-size:21px;letter-spacing:-.6px;margin:0}header small{font-size:12px;color:#9bcbcd}header p{font-size:12px;color:#a4c3d6;margin:3px 0 0}.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.tabs button{width:100%}.panel{background:#132f41;border:1px solid #365669;border-radius:14px;padding:14px;margin-top:11px}button,input,select{font:inherit}button{background:#24485f;border:1px solid #4b778d;color:#f6fdff;border-radius:10px;padding:10px;cursor:pointer;min-height:44px}button.primary,button.active{background:#067e83;border-color:#1bd1bf;color:white}button:disabled{opacity:.38}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid #55d4cb;outline-offset:1px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1;white-space:normal}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}label{font-size:12px;color:#b9d2e0;display:block;margin:10px 0 5px}select,input[type=number],input[type=file],input[type=range]{width:100%;min-width:0}select,input[type=number],input[type=file]{padding:10px;background:#081e2b;color:white;border:1px solid #4b6c82;border-radius:9px}input[type=file]{font-size:12px}.muted,.note{color:#bacddb;font-size:13px;line-height:1.45}.note{margin:8px 0}.small{font-size:12px}.line{border-top:1px solid #335569;margin:13px 0}.status{font-size:13px;color:#91ead5;margin:11px 0 7px;min-height:19px}.meter{height:8px;background:#244254;border-radius:10px;overflow:hidden}.meter span{display:block;background:#3fd0b2;width:0;height:100%}.hide{display:none!important}h2{font-size:16px;font-weight:700;margin:0 0 9px}.pill{border:1px solid #496579;border-radius:7px;color:#d1e5ee;background:#1a4153;font-size:12px;padding:5px 7px;display:inline-block}.chips{display:flex;gap:6px;flex-wrap:wrap}.warn{color:#f8c897}strong{font-weight:650}.fileinfo{font-size:12px;color:#a3d0f0}.chartframe{background:#f7f7f7;border-radius:8px;margin:10px 0;max-height:60vh;overflow:auto;text-align:center;overscroll-behavior:contain}canvas#fax{background:white;width:100%;max-width:600px;display:block;margin:auto;image-rendering:auto}canvas#spectrum,canvas#navSpectrum{width:100%;height:115px;background:#091e2b;border-radius:7px}pre{font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;background:#061723;white-space:pre-wrap;word-break:break-word;min-height:110px;max-height:340px;overflow:auto;padding:10px;border-radius:8px;user-select:text}summary{cursor:pointer;font-weight:650;padding:3px 0}details summary::marker{color:#5bd2b6}.hint{background:#0b3144;border-left:3px solid #34b9bc;padding:9px 10px;border-radius:6px}.subtle{color:#93adb9}.progress{font-variant-numeric:tabular-nums;color:#bce7eb}.footer{margin:19px 0;color:#9ab2c0;font-size:11px}input[type=range]{accent-color:#24bcb3}#faxState{font-weight:700;color:#9ce9d9}.mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"} @media(max-width:470px){.grid{grid-template-columns:1fr} h1{font-size:19px} .panel{padding:12px} .actions button{font-size:14px}} 
+</style></head><body>
+<header><div class="inner"><h1>📻 ATS25 Weather Station <small>v0.4</small></h1><p>WEFAX · RTTY · NAVTEX — lyd fra din ATS25, behandlet på telefonen</p></div></header>
+<main class="wrap">
+<nav class="tabs" aria-label="Vælg modtagertype"><button data-tab="fax" class="active">🗺 WEFAX</button><button data-tab="rtty">RTTY</button><button data-tab="navtex">NAVTEX</button></nav>
+<section class="panel">
+  <label for="station">Modtagestation (vælg først)</label><select id="station"></select>
+  <p id="tuning" class="note">Stil ATS25 på almindelig USB.</p>
+  <div class="actions"><button id="start" class="primary">🎙 Start mikrofon</button><button id="stop" disabled>■ Stop</button></div>
+  <p id="status" class="status" role="status">Klar · mikrofonen kræver HTTPS og tilladelse.</p>
+  <div class="meter" aria-label="Mikrofonlydstyrke"><span id="level"></span></div>
+  <p id="diagnostic" class="note">Signalbjælken viser lydstyrke, ikke om der er et vejrkort.</p>
+</section>
+<section id="faxPanel" class="panel">
+  <h2>WEFAX – vejrkort</h2>
+  <div class="chips"><span class="pill" id="faxState">Afventer signal</span><span id="faxFrequency" class="pill">Lydtone: – Hz</span><span id="faxOffset" class="pill">Offset: 0 Hz</span></div>
+  <p class="note" id="faxInfo">Automatisk tilstand afventer vedvarende billedvariation. En enkelt, konstant tone tegnes ikke som et sort kort.</p>
+  <div class="actions"><button id="manualFax">▶ Start kort nu</button><button id="newFax">↺ Nyt kort</button></div>
+  <div class="chartframe"><canvas width="600" height="100" id="fax" aria-label="Modtaget WEFAX-vejrkort"></canvas></div>
+  <div class="actions"><button id="saveFax">⬇ Gem PNG</button><button id="autoContrast">Auto kontrast</button><button id="invert">Vend farver</button></div>
+  <details style="margin-top:14px" id="faxAdvanced"><summary>Flere indstillinger (normalt ikke nødvendigt)</summary>
+    <div class="grid"><div><label for="lpm">Hastighed</label><select id="lpm"><option value="120">120 LPM (DWD)</option><option value="60">60 LPM</option><option value="240">240 LPM</option></select></div><div><label for="ioc">IOC</label><select id="ioc"><option value="576">576 (DWD)</option><option value="288">288</option></select></div>
+    <div><label for="faxTune">Frekvenskorrektion</label><select id="faxTune"><option value="auto">Automatisk (anbefalet)</option><option value="manual">Manuel</option></select></div><div><label for="faxManualOffset">Manuelt offset i Hz (−650 til +650)</label><input id="faxManualOffset" type="number" min="-650" max="650" step="10" value="0" disabled></div></div>
+    <label for="skew">Ret kortets hældning (pixels nederst, +/-100)</label><input type="range" id="skew" min="-100" max="100" step="1" value="0"><p class="small muted" id="skewValue">Hældning: 0</p>
+    <label for="horizontal">Forskyd kortet vandret</label><input type="range" id="horizontal" min="0" max="599" step="1" value="0">
+    <p class="note">Auto-start registrerer vedvarende billedmodulation, men er ikke en komplet APT/fasningsdekoder. Hvis du er midt i udsendelsen, vælg “Start kort nu”. Justér kun offset manuelt, hvis kortet er for mørkt/lyst trods tydeligt signal.</p>
+  </details>
+</section>
+<section id="rttyPanel" class="panel hide"><h2>RTTY – tekst</h2>
+  <div class="chips"><span id="detectedTones" class="pill">Toner: søger …</span><span id="detectedPolarity" class="pill">Polaritet: automatisk</span><span id="frames" class="pill">0 tegn</span></div>
+  <p id="rttyInfo" class="note">Den afprøvede v0.3-dekoder er bevaret.</p><canvas id="spectrum" width="640" height="180"></canvas>
+  <div class="actions"><button id="clear">Ryd tekst</button><button id="saveText">Gem TXT</button></div><pre id="decoded" aria-label="Afkodet RTTY-tekst"></pre>
+  <details><summary>Flere RTTY-indstillinger</summary><div class="grid"><div><label for="baud">Hastighed</label><select id="baud"><option value="50">50 baud (DWD)</option><option value="45.45">45,45 baud</option><option value="75">75 baud</option></select></div><div><label for="shift">Shift</label><select id="shift"><option value="450">450 Hz (DWD)</option><option value="170">170 Hz</option><option value="850">850 Hz</option></select></div><div><label for="toneMode">Toner</label><select id="toneMode"><option value="auto">Søg automatisk</option><option value="manual">Indstil manuelt</option></select></div><div><label for="toneLow">Lav tone (Hz)</label><input id="toneLow" type="number" min="200" max="3000" step="1" value="346" disabled></div><div><label for="polarity">Polaritet</label><select id="polarity"><option value="auto">Automatisk</option><option value="low">Lav = mark</option><option value="high">Høj = mark</option></select></div><div><label for="output">Tekstvisning</label><select id="output"><option value="normal">Normal tekst</option><option value="raw">Vis kontroltegn</option></select></div></div></details>
+</section>
+<section id="navtexPanel" class="panel hide"><h2>NAVTEX – signalanalyse</h2>
+  <p class="note warn">NAVTEX-tekstafkodning er endnu ikke færdig. 100 baud/170 Hz toneanalyse er tilgængelig, men der mangler korrekt CCIR 476/FEC-afkodning. Brug ikke appen som sikkerhedsmodtager.</p>
+  <div class="chips"><span id="navtexInfo" class="pill">Afventer lyd</span></div><canvas id="navSpectrum" width="640" height="180"></canvas>
+</section>
+<details class="panel" id="tests"><summary>🧪 Test med lydfil eller syntetisk signal</summary><p class="note">Filer behandles lokalt. WEFAX-testen sender et genereret faxsignal gennem den rigtige lyddekoder; den indsætter ikke et færdigt billede.</p>
+  <div class="actions"><button id="test">▶ Test valgt dekoder</button></div>
+  <label for="recording">Lydoptagelse (M4A/WAV/MP3)</label><input id="recording" type="file" accept="audio/*,.m4a,.wav,.mp3">
+  <div class="actions" style="margin-top:9px"><button id="decodeFile">Afkod valgt lydfil</button><button id="cancelFile" disabled>Afbryd</button></div><p id="fileProgress" class="fileinfo" aria-live="polite"></p>
+</details>
+<details class="panel"><summary>Guide og begrænsninger</summary><p class="note">1. Vælg WEFAX eller RTTY. Indstil radioen i almindelig USB på den foreslåede frekvens (finindstil BFO efter behov). Mikrofon 10–20 cm fra højttaleren, skru op så signalbjælken bevæger sig uden forvrængning.</p><p class="note">2. WEFAX afventer automatisk tydelig billedvariation. Hvis du kommer midt i udsendelsen, tryk “Start kort nu”. Hvis signalet er en fast tone, vises intet kort. WEFAX er eksperimentel; automatisk APT, linjefasning og pålidelig skævhedskorrektion er ikke fuldt valideret.</p><p class="note">3. RTTY er testet på dine DWD-optagelser. NAVTEX afkoder ikke tekst endnu. Lydfiler uploades ikke. Appen er et hobbyværktøj, ikke et sikkerheds- eller varslingssystem.</p><p class="note" id="offlineState">Offline: undersøger om appens cache er installeret …</p></details>
+<p class="footer">v0.4 · lokal signalbehandling · ingen sporing, konti eller serveranalyse · ikke til sikkerhedskritisk brug</p>
+</main>
+<script>
+'use strict';
+/* ATS25 Weather Station - experimental RTTY DSP, standalone browser/Node core.
+   Input: real, mono audio samples at a known sampling rate (preferably 12 kHz).
+   Not for safety of life. */
+const BAUDOT_LETTERS = ['', 'E', '\n', 'A', ' ', 'S', 'I', 'U', '\r', 'D', 'R', 'J', 'N', 'F', 'C', 'K', 'T', 'Z', 'L', 'W', 'H', 'Y', 'P', 'Q', 'O', 'B', 'G', '', 'M', 'X', 'V', ''];
+const BAUDOT_FIGURES = ['', '3', '\n', '-', ' ', "'", '8', '7', '\r', '$', '4', '\x07', ',', '!', ':', '(', '5', '+', ')', '2', '#', '6', '0', '1', '9', '?', '&', '', '.', '/', ';', ''];
+
+class BaudotFrameDecoder {
+  constructor(rate, baud, markLow) { this.rate = rate; this.baud = baud; this.markLow = markLow; this.clear(); }
+  clear(){this.state='idle';this.timer=0;this.data=[];this.bits=0;this.previous=1;this.valid=0;this.invalid=0;this.letters=true;this.text='';this.transitions=0;}
+  push(bit){
+    if(this.state==='idle'){
+      if(this.previous===1 && bit===0){this.state='start';this.timer=Math.round(this.rate/this.baud*.5);this.transitions++;}
+    }else if(--this.timer<=0){
+      if(this.state==='start'){
+        if(bit!==0){this.state='idle';this.invalid++;}
+        else{this.state='data';this.bits=0;this.data=[];this.timer=Math.round(this.rate/this.baud);}
+      }else if(this.state==='data'){
+        this.data.push(bit);this.bits++;this.timer=Math.round(this.rate/this.baud);
+        if(this.bits===5)this.state='stop';
+      }else if(this.state==='stop'){
+        if(bit===1){
+          const v=this.data.reduce((a,b,i)=>a+(b<<i),0);
+          this.valid++;
+          if(v===31)this.letters=true;
+          else if(v===27)this.letters=false;
+          else {
+            const ch=(this.letters?BAUDOT_LETTERS:BAUDOT_FIGURES)[v]||'';
+            if(ch){this.text+=ch;if(this.text.length>24000)this.text=this.text.slice(-16000);}
+          }
+        }else this.invalid++;
+        this.state='idle';
+      }
+    }
+    this.previous=bit;
+  }
+  quality(){const n=this.valid+this.invalid;return n?this.valid/n:0;}
+}
+
+function rttyFFTAmplitude(samples){
+  const n=samples.length, re=new Float64Array(n), im=new Float64Array(n);
+  for(let i=0;i<n;i++)re[i]=samples[i]*(0.5-0.5*Math.cos(2*Math.PI*i/(n-1)));
+  for(let i=1,j=0;i<n;i++){
+    let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;
+    if(i<j){let t=re[i];re[i]=re[j];re[j]=t;}
+  }
+  for(let len=2;len<=n;len*=2){
+    const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang);
+    for(let i=0;i<n;i+=len){let ur=1,ui=0;
+      for(let j=0;j<len/2;j++){
+        let idx=i+j,k=idx+len/2,vr=re[k]*ur-im[k]*ui,vi=re[k]*ui+im[k]*ur;
+        re[k]=re[idx]-vr;im[k]=im[idx]-vi;re[idx]+=vr;im[idx]+=vi;
+        const newUr=ur*wr-ui*wi;ui=ur*wi+ui*wr;ur=newUr;
+      }
+    }
+  }
+  const power=new Float64Array(n/2+1);
+  for(let k=0;k<power.length;k++)power[k]=re[k]*re[k]+im[k]*im[k];
+  return power;
+}
+class RTTYDemodulator {
+  constructor(rate=12000,baud=50,shift=450,opts={}){
+    this.rate=rate;this.baud=baud;this.shift=shift;this.onSpectrum=opts.onSpectrum||null;
+    this.searchSamples=Math.round(rate*0.64);this.fftSize=4096;
+    this.wave=new Float32Array(this.fftSize);this.wavePtr=0;this.total=0;
+    this.polarity='auto';this.manual=false;this.low=0;this.high=0;this.locked=false;
+    this.lowMark=new BaudotFrameDecoder(rate,baud,true);
+    this.highMark=new BaudotFrameDecoder(rate,baud,false);
+    this.diagnostic={};this.setDemodFrequencies(345,795,true);
+    this.level=0;this.energy=0;this.rawBit=1;this.changes=0;this.autoDecision='';
+    this.prevInput=0;this.dc=0;
+  }
+  setDemodFrequencies(lo,hi,reset=false){
+    this.low=lo;this.high=hi;
+    this.stepL=2*Math.PI*lo/this.rate;this.stepH=2*Math.PI*hi/this.rate;
+    this.phaseL=0;this.phaseH=0;
+    this.lp=new Float64Array(16);this.rawBit=1;
+    if(reset){this.lowMark.clear();this.highMark.clear();this.autoDecision='';}
+  }
+  setBaudShift(baud,shift){this.baud=baud;this.shift=shift;this.lowMark=new BaudotFrameDecoder(this.rate,baud,true);this.highMark=new BaudotFrameDecoder(this.rate,baud,false);this.autoDecision='';this.locked=false;}
+  setToneMode(mode,low=345){
+    this.manual=mode==='manual';
+    if(this.manual){this.locked=true;this.setDemodFrequencies(low,low+this.shift,true);}
+    else {this.locked=false;this.lowMark.clear();this.highMark.clear();this.autoDecision='';}
+  }
+  clearText(){this.lowMark.clear();this.highMark.clear();this.autoDecision='';}
+  autoSearch(){
+    if(this.total<this.fftSize)return;
+    const waveform=new Float32Array(this.fftSize);
+    const ptr=this.wavePtr;
+    for(let i=0;i<this.fftSize;i++)waveform[i]=this.wave[(ptr+i)%this.fftSize];
+    const spec=rttyFFTAmplitude(waveform),df=this.rate/this.fftSize;
+    let best=0,lo=0,hi=0;
+    const lim=Math.min(Math.round(2900/df),spec.length-10);
+    const span=Math.max(2,Math.round(14/df));
+    for(let k=Math.ceil(220/df);k<lim;k++){
+      if(spec[k]<spec[k-1]||spec[k]<spec[k+1])continue;
+      const target=k+this.shift/df,st=Math.round(target);
+      let cand=0,idx=st;
+      for(let j=Math.max(0,st-span);j<=Math.min(spec.length-1,st+span);j++){
+        if(spec[j]>cand){cand=spec[j];idx=j;}
+      }
+      const score=Math.sqrt(spec[k]*cand);
+      if(score>best){best=score;lo=k*df;hi=idx*df;}
+    }
+    // Mean spectral floor in normal audible RTTY region.
+    let sum=0,count=0;
+    for(let k=Math.ceil(220/df);k<Math.min(spec.length,Math.floor(2900/df));k+=9){sum+=spec[k];count++;}
+    const floor=sum/Math.max(1,count);
+    const ratio=best/(floor+1e-20);
+    const candidateOk=best>0&&ratio>3.5;
+    if(!this.manual&&candidateOk){
+      if(!this.locked){this.setDemodFrequencies(lo,hi,true);this.locked=true;}
+      else if(Math.abs(this.low-lo)>55 && Math.abs(this.high-hi)>55){
+        // Avoid chasing transient interference; only retune after consecutive scans.
+        const id=Math.round(lo/30);
+        if(this.otherCandidate===id)this.otherCount=(this.otherCount||0)+1;
+        else{this.otherCandidate=id;this.otherCount=1;}
+        if(this.otherCount>=4){this.setDemodFrequencies(lo,hi,true);this.otherCount=0;}
+      }else this.otherCount=0;
+    }
+    this.spectrum=spec;this.noiseFloor=floor;this.toneConfidence=ratio;
+    this.onSpectrum?.(spec,df,{low:this.low,high:this.high,ratio,locked:this.locked,candidateLow:lo,candidateHigh:hi});
+  }
+  push(x){
+    // HF RTTY baseband mixing and two cascaded lowpasses for each mark/space tone.
+    this.wave[this.wavePtr]=x;this.wavePtr=(this.wavePtr+1)%this.fftSize;
+    this.total++;
+    if(this.total%this.searchSamples===0)this.autoSearch();
+    // Simple DC removal (microphone artifacts at low frequencies).
+    this.dc += .002*(x-this.dc);x-=this.dc;
+    this.level=.999*this.level+.001*x*x;
+    if(!this.locked)return;
+    this.phaseL+=this.stepL;if(this.phaseL>2*Math.PI)this.phaseL-=2*Math.PI;
+    this.phaseH+=this.stepH;if(this.phaseH>2*Math.PI)this.phaseH-=2*Math.PI;
+    const al=1-Math.exp(-2*Math.PI*65/this.rate);
+    const tones=[x*Math.cos(this.phaseL),x*Math.sin(this.phaseL),x*Math.cos(this.phaseH),x*Math.sin(this.phaseH)];
+    for(let i=0;i<4;i++){
+      this.lp[i]+=al*(tones[i]-this.lp[i]);
+      this.lp[i+4]+=al*(this.lp[i]-this.lp[i+4]);
+    }
+    const pL=this.lp[4]**2+this.lp[5]**2,pH=this.lp[6]**2+this.lp[7]**2;
+    this.energy=.995*this.energy+.005*(pL+pH);
+    let symbol=this.rawBit;
+    if(pL>pH*1.12)symbol=1;
+    else if(pH>pL*1.12)symbol=0;
+    if(symbol!==this.rawBit){this.rawBit=symbol;this.changes++;}
+    this.lowMark.push(symbol);this.highMark.push(1-symbol);
+  }
+  bestSide(){
+    if(this.polarity==='low')return 'low';if(this.polarity==='high')return 'high';
+    const a=this.lowMark,b=this.highMark;
+    const na=a.valid+a.invalid,nb=b.valid+b.invalid;
+    if(na+nb<12)return '';
+    const sa=(a.valid-0.7*a.invalid),sb=(b.valid-0.7*b.invalid);
+    if(Math.abs(sa-sb)>3)this.autoDecision=sa>sb?'low':'high';
+    if(!this.autoDecision&&na+nb>35)this.autoDecision=a.quality()>b.quality()?'low':'high';
+    return this.autoDecision;
+  }
+  getStatus(){
+    const side=this.bestSide(),d=side==='low'?this.lowMark:side==='high'?this.highMark:null;
+    return {locked:this.locked,low:this.low,high:this.high,confidence:this.toneConfidence||0,side,valid:d?.valid||0,invalid:d?.invalid||0,transitions:this.changes,level:Math.sqrt(this.level),text:d?.text||'',lowStats:[this.lowMark.valid,this.lowMark.invalid],highStats:[this.highMark.valid,this.highMark.invalid]};
+  }
+}
+if(typeof module!=='undefined' && module.exports)module.exports={RTTYDemodulator,BaudotFrameDecoder,rttyFFTAmplitude};
+
+</script>
+<script>
+'use strict';
+/* ATS25 Weather Station - WEFAX demodulator, source 12000 Hz mono PCM.
+   Experimental offline decoder. Never use for safety-critical navigation.
+   Real audio -> complex heterodyne -> 3-pole LP -> FM phase discriminator.
+   Automatic tuning uses a *distribution* of stable decoded pixels, not a lone carrier.
+   APT classifier & phasing remain experimental pending real complete transmissions.
+*/
+class WeatherFaxDecoder {
+  constructor(rate=12000,opts={}){
+    this.rate=rate; this.lpm=opts.lpm||120; this.ioc=opts.ioc||576;
+    this.outWidth=opts.width||600;this.maxLines=opts.maxLines||1600;
+    this.onLine=opts.onLine||(()=>{});this.onEvent=opts.onEvent||(()=>{});
+    this.mode=opts.mode||'auto'; // auto / manual
+    this.reset();
+  }
+  reset(){
+    this.phase=0;this.osc=0;this.step=2*Math.PI*1900/this.rate;
+    this.lpI=[0,0,0];this.lpQ=[0,0,0];this.prevI=0;this.prevQ=0;
+    this.hasIQ=false;this.inputRms=0;this.iqPower=0;this.power=0;
+    this.lpAlpha=1-Math.exp(-2*Math.PI*1000/this.rate);
+    this.freqSmoothed=1900;this.freq=1900;this.frequencyOffset=0;
+    this.offsetMan=null;this.offsetConfidence=0;
+    this.pixelsSinceLine=0;this.lineBuffer=[];this.lines=0;
+    this.sampleCount=0;this.outAccum=0;this.outCount=0;this.pixelPhase=0;this.pixelsPerSecond=this.outWidth*this.lpm/60;
+    this.onLineMarks=[];this.maxLinesReached=false;this.finished=false;
+    this.hist=new Uint32Array(64);this.histCount=0;this.freqSpread=0;
+    this.freqP10=0;this.freqP90=0;this.lastTone=0;
+    this.currentTone=0;this.currentConfidence=0;this.toneChanges=0;this.lowTones=0;
+    this.autoState='waiting';this.waitCount=0;this.imageStart=0;this.apts=0;this.aptStartTime=0;
+    this.aptScore=0;this.lastStatusSec=0;this.aptNoise=0;
+    this.recent=new Float32Array(6000);this.recentPos=0;this.recentCount=0;
+    this.freqVec=new Float32Array(1200);this.freqVecPos=0;this.freqVecCount=0;this.wideConsecutive=0;
+    this.triggerSamples=0;this.invert=false;this.suspicious=0;
+    this.phasingPixels=[];this.expectedPhase=null;
+  }
+  setMode(mode){this.mode=mode;}
+  setOffsetHz(v){this.offsetMan=(v===null||v==='')?null:Number(v);}
+  setLPM(n){this.lpm=n;this.pixelsPerSecond=this.outWidth*n/60;}
+  setInvert(v){this.invert=!!v;}
+  startManual(){
+    if(this.finished) return;
+    this.mode='manual';this.autoState='image';this.lineBuffer=[];this.pixelsSinceLine=0;
+    this.onEvent('start','Manuel billedmodtagelse startet.');
+  }
+  stop(){this.finished=true;this.autoState='stopped';this.onEvent('stop','Modtagelse stoppet.');}
+  emitLine(){
+    if(this.lines>=this.maxLines){this.maxLinesReached=true;this.stop();return;}
+    if(this.lineBuffer.length!==this.outWidth)return;
+    this.onLine(Uint8ClampedArray.from(this.lineBuffer),this.lines);
+    this.lines++;this.lineBuffer=[];this.pixelsSinceLine=0;
+  }
+  makePixel(gray){
+    if(this.autoState==='image' && !this.finished){
+      this.lineBuffer.push(this.invert?255-gray:gray);
+      if(this.lineBuffer.length>=this.outWidth)this.emitLine();
+    }
+  }
+  checkAdaptiveOffset(){
+    if(this.histCount<900)return;
+    let cumulative=0,l=-1,h=-1;
+    const p10=Math.floor(this.histCount*.10),p90=Math.floor(this.histCount*.90);
+    for(let k=0;k<this.hist.length;k++){
+      cumulative+=this.hist[k];if(l===-1&&cumulative>=p10)l=k;
+      if(h===-1&&cumulative>=p90)h=k;
+    }
+    const low=800+l*40+20, high=800+h*40+20;
+    this.freqP10=low;this.freqP90=high;this.freqSpread=high-low;
+    const strongVariation=this.freqSpread>=510 && this.freqSpread<=1200 && low>=930 && high<=2900 && Math.sqrt(this.inputRms)>.00025;
+    this.wideConsecutive=strongVariation?this.wideConsecutive+1:0;
+    if(strongVariation && this.wideConsecutive>=2){
+      const proposed=Math.max(-650,Math.min(650,(low+high)/2-1900));
+      // Moving median estimate, slow so white / black region doesn't cause large drift.
+      if(Math.abs(proposed-this.frequencyOffset)<420){this.frequencyOffset=this.frequencyOffset*.75+proposed*.25;this.offsetConfidence=Math.min(1,this.offsetConfidence+.17);}
+    }else if(this.freqSpread<180 && high>2300 && high<3000){
+      // Only suggest, do NOT auto lock based on a stationary, unidentified tone.
+      this.suspicious=Math.round(high-2300);
+    }
+    // A single noisy 2 s window must NOT trigger a recording.
+    if(this.mode==='auto'&&this.autoState==='waiting'&&this.wideConsecutive>=3){
+      this.autoState='image';this.lineBuffer=[];
+      this.onEvent('start','Vedvarende WEFAX-lignende modulation: billedmodtagelse startet.');
+    }
+    this.hist.fill(0);this.histCount=0;
+  }
+  getInfo(){
+    const flat=this.freqSpread<140 || this.toneChanges<6;
+    let diagnostic;
+    if(Math.sqrt(this.inputRms)<.00018)diagnostic='Meget svagt signal. Øg radioens lydstyrke lidt.';
+    else if(flat && this.autoState==='waiting')diagnostic=`Næsten konstant tone ved ca. ${Math.round(this.lastTone)} Hz. Afventer selve billedsignalet.`;
+    else if(this.autoState==='image')diagnostic=`Modtager billede · ${this.lines} linjer. ${this.offsetMan!==null?'Manuel offset':'Auto-offset '+Math.round(this.frequencyOffset)+' Hz'}.`;
+    else if(this.autoState==='phasing')diagnostic='Muligt startsignal. Afventer billedlinjer.';
+    else diagnostic='Modtager lyd; leder efter billedvariation / APT-start.';
+    return {lines:this.lines,mode:this.mode,state:this.autoState,offset:Math.round(this.offsetMan===null?this.frequencyOffset:this.offsetMan),confidence:this.offsetConfidence,frequency:Math.round(this.lastTone),spread:Math.round(this.freqSpread),level:Math.sqrt(this.inputRms),aptScore:this.aptScore,flat,diagnostic};
+  }
+  push(x){
+    if(this.finished)return;
+    this.sampleCount++;
+    this.inputRms=.9995*this.inputRms+.0005*x*x;
+    // Heterodyne 1900 Hz IF, I/Q: positive frequency offset yields increasing phase.
+    this.osc+=this.step;if(this.osc>=Math.PI*2)this.osc-=Math.PI*2;
+    const c=Math.cos(this.osc),s=-Math.sin(this.osc);
+    let i=x*c,q=x*s;
+    const a=this.lpAlpha;
+    for(let j=0;j<3;j++){
+      this.lpI[j]+=a*(i-this.lpI[j]);this.lpQ[j]+=a*(q-this.lpQ[j]);
+      i=this.lpI[j];q=this.lpQ[j];
+    }
+    const mag=i*i+q*q;
+    this.iqPower=.999*this.iqPower+.001*mag;
+    if(this.hasIQ && mag>this.iqPower*.07 && this.iqPower>3e-11){
+      // arg(z_t * conj(z_{t-1})): radians/sample -> Hz
+      const cross=q*this.prevI-i*this.prevQ,dot=i*this.prevI+q*this.prevQ;
+      const instant=1900+Math.atan2(cross,dot)*this.rate/(2*Math.PI);
+      if(instant>650 && instant<3350){
+        this.freqSmoothed+=.13*(instant-this.freqSmoothed);
+        this.freq=this.freqSmoothed;
+      }
+    }
+    this.prevI=i;this.prevQ=q;this.hasIQ=true;
+    this.pixelPhase+=this.pixelsPerSecond/this.rate;
+    // At 120 LPM and 600 px/line, collect around 10 input samples/px.
+    const valid=mag>this.iqPower*.10 && this.iqPower>2e-11;
+    if(valid){this.outAccum+=this.freq;this.outCount++;}
+    if(this.pixelPhase>=1){
+      this.pixelPhase-=1;
+      const mean=this.outCount?this.outAccum/this.outCount:NaN;
+      this.outAccum=0;this.outCount=0;
+      this.handleFrequency(mean);
+    }
+  }
+  handleFrequency(f){
+    if(!Number.isFinite(f))return;
+    this.lastTone=f;
+    // Update recent history and 40 Hz frequency histogram in bounded memory.
+    const idx=Math.max(0,Math.min(this.hist.length-1,Math.floor((f-800)/40)));
+    this.hist[idx]++;this.histCount++;
+    if(this.histCount>=2400)this.checkAdaptiveOffset();
+    const last=this.recent[this.recentPos];
+    this.recent[this.recentPos]=f;this.recentPos=(this.recentPos+1)%this.recent.length;
+    if(this.recentCount<this.recent.length)this.recentCount++;
+    if(Math.abs(f-last)>125 && this.recentCount>600) this.toneChanges++;
+    if(this.toneChanges>150000)this.toneChanges=100000;
+    const off=this.offsetMan===null?this.frequencyOffset:this.offsetMan;
+    const gray=Math.max(0,Math.min(255,Math.round((f-1500-off)*255/800)));
+    if(this.mode==='manual'){
+      if(this.autoState==='image')this.makePixel(gray);
+      return;
+    }
+    // Auto: require actual modulation in running samples, not a single strong tone.
+    // Distinguish stationary calibration/interference from valid picture.
+    // Start state is changed only after 3 independent 2-second positive windows
+    // in checkAdaptiveOffset(). This suppresses isolated wrong-frequency carriers.
+    if(this.autoState==='image')this.makePixel(gray);
+  }
+}
+if(typeof module!=='undefined'&&module.exports)module.exports={WeatherFaxDecoder};
+
+</script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const stations={
+ fax:[['DWD Pinneberg · 3855 kHz (aften/nat)','3853,1'],['DWD Pinneberg · 7880 kHz','7878,1'],['DWD Pinneberg · 13882,5 kHz (dag)','13880,6']],
+ rtty:[['DWD DDK2 · 4583 kHz','4582'],['DWD DDH7 · 7646 kHz','7645'],['DWD DDK9 · 10100,8 kHz','10099,8']],
+ navtex:[['NAVTEX 518 kHz (internationalt)','518'],['NAVTEX 490 kHz (lokalt)','490'],['NAVTEX HF · 4209,5 kHz','4209,5']]
+};
+let tab='fax',live=false,stream=null,audioContext=null,micSource=null,micProcessor=null,uiTimer=null,wakeLock=null;
+let fileRunning=false,fileAbort=false,testRunning=false,sourceRate=48000,downStep=4,downN=0;
+let lp0=0,lp1=0,lp2=0,micEnergy=0,receiver=null,faxDecoder=null;
+let faxLines=[],faxInvert=false,faxAutoContrast=false,faxContrastGain=1,latestSpectrum=null;
+const faxCanvas=$('fax'),faxCtx=faxCanvas.getContext('2d',{willReadFrequently:false});
+const say=msg=>{$('status').textContent=msg};
+function initSpectrum(id){const c=$(id),g=c.getContext('2d');g.fillStyle='#071724';g.fillRect(0,0,c.width,c.height);}
+function createReceiver(rate){
+ receiver=new RTTYDemodulator(rate,tab==='navtex'?100:Number($('baud').value),tab==='navtex'?170:Number($('shift').value),{
+  onSpectrum:(p,df,info)=>{latestSpectrum=p;renderSpectrum(tab==='navtex'?'navSpectrum':'spectrum',p,df,info.low,info.high)}
+ });
+ receiver.polarity=$('polarity').value;
+ receiver.setToneMode(tab==='navtex'?'auto':$('toneMode').value,Number($('toneLow').value)||346);
+}
+function createFax(rate){
+ faxDecoder=new WeatherFaxDecoder(rate,{lpm:Number($('lpm').value),ioc:Number($('ioc').value),width:600,maxLines:1600,
+  onLine:(line,row)=>handleFaxLine(line,row),
+  onEvent:(type,msg)=>{if(type==='start')say(msg);else if(type==='stop')say(msg)}
+ });
+ if($('faxTune').value==='manual')faxDecoder.setOffsetHz(Number($('faxManualOffset').value));
+}
+function resetFax(){
+ faxLines=[];faxInvert=false;faxAutoContrast=false;faxContrastGain=1;
+ $('invert').textContent='Vend farver';$('autoContrast').textContent='Auto kontrast';
+ if(faxDecoder)createFax(sourceRate/downStep);
+ faxCanvas.height=100;faxCtx.fillStyle='white';faxCtx.fillRect(0,0,faxCanvas.width,faxCanvas.height);
+ $('faxState').textContent='Afventer signal';$('faxInfo').textContent='Auto: afventer vedvarende billedvariation. Tryk “Start kort nu”, hvis du allerede hører en udsendelse.';
+ updateUI();
+}
+function calcContrast(){
+ if(!faxAutoContrast || faxLines.length<6){faxContrastGain=1;return;}
+ let hist=new Uint32Array(256),count=0;
+ for(let row=0;row<faxLines.length;row+=Math.max(1,Math.floor(faxLines.length/200))){let data=faxLines[row];for(let i=0;i<data.length;i+=3){hist[data[i]]++;count++;}}
+ let sum=0,q10=-1,q90=255;
+ for(let i=0;i<256;i++){sum+=hist[i];if(sum>=count*.1&&q10===-1)q10=i;if(sum>=count*.9){q90=i;break}}
+ faxContrastGain=q90-q10<45?1:Math.max(1,Math.min(2.3,190/(q90-q10)));
+}
+function shade(v){
+ let y=Math.max(0,Math.min(255,Math.round((v-127.5)*faxContrastGain+127.5)));
+ return faxInvert?255-y:y;
+}
+function renderFaxLine(raw,row,ctx=faxCtx,applyShift=true){
+ const im=ctx.createImageData(600,1),rgba=im.data;
+ const hor=Number($('horizontal').value)||0,skew=Number($('skew').value)||0;
+ const sh=applyShift?Math.round(hor+skew*row/1600):0;
+ for(let x=0;x<600;x++){
+  const src=((x-sh)%600+600)%600;
+  const c=shade(raw[src]);const n=x*4;rgba[n]=c;rgba[n+1]=c;rgba[n+2]=c;rgba[n+3]=255;
+ }
+ ctx.putImageData(im,0,row);
+}
+function ensureCanvas(row){
+ if(row<faxCanvas.height)return;
+ faxCanvas.height=Math.min(1600,Math.max(row+1,Math.ceil((row+1)/80)*80));
+ for(let r=0;r<faxLines.length;r++)renderFaxLine(faxLines[r],r);
+}
+function redrawFax(){
+ calcContrast();faxCtx.fillStyle='white';faxCtx.fillRect(0,0,faxCanvas.width,faxCanvas.height);
+ for(let i=0;i<faxLines.length;i++)renderFaxLine(faxLines[i],i);
+}
+function handleFaxLine(line,row){
+ faxLines.push(line);ensureCanvas(row);renderFaxLine(line,row);
+ if(faxAutoContrast && row%35===0)redrawFax();
+}
+function setStatusFromDecoder(){
+ if(!faxDecoder)return;
+ const f=faxDecoder.getInfo();
+ $('faxState').textContent=f.state==='waiting'?'Afventer billedsignal':f.state==='image'?'Optager · '+f.lines+' linjer':f.state==='stopped'?'Stoppet':'Klar';
+ $('faxFrequency').textContent='Lydtone: '+(Number.isFinite(f.frequency)&&f.frequency>0?f.frequency+' Hz':'–');
+ $('faxOffset').textContent='Offset: '+f.offset+' Hz';
+ $('faxInfo').textContent=f.diagnostic;
+ if(f.lines===0 && f.state==='waiting'){
+  if(f.frequency<1100||f.frequency>2750)$('faxInfo').textContent+=' Kontroller USB/BFO, hvis du forventer WEFAX.';
+ }
+}
+function renderSpectrum(id,power,df,lo,hi){
+ const c=$(id),g=c.getContext('2d'),w=c.width,h=c.height;
+ g.fillStyle='#071724';g.fillRect(0,0,w,h);
+ const minHz=100,maxHz=2900,toX=f=>(f-minHz)/(maxHz-minHz)*w;
+ let maxP=1e-12;for(let i=0;i<power.length;i++)if(i*df>minHz&&i*df<maxHz)maxP=Math.max(maxP,power[i]);
+ g.strokeStyle='#7cd0ed';g.lineWidth=2;g.beginPath();let started=false;
+ for(let i=0;i<power.length;i++){
+  const f=i*df;if(f<minHz||f>maxHz)continue;
+  const v=Math.max(0,Math.min(1,(10*Math.log10(power[i]/maxP+1e-15)+53)/53));
+  const x=toX(f),y=h-24-v*(h-35);
+  if(!started){g.moveTo(x,y);started=true;}else g.lineTo(x,y);
+ }g.stroke();g.font='14px system-ui';g.fillStyle='#b5ccdb';
+ for(const f of [500,1000,1500,2000,2500])g.fillText((f/1000).toFixed(1)+'k',toX(f)-10,h-5);
+ for(const [f,color] of [[lo,'#f8da78'],[hi,'#68e1b4']])if(f>minHz&&f<maxHz){const x=toX(f);g.strokeStyle=color;g.beginPath();g.moveTo(x,5);g.lineTo(x,h-25);g.stroke();}
+}
+function viewText(t){return $('output').value==='raw'?t.replaceAll('\r','␍').replaceAll('\n','␊\n'):t.replace(/\r\n/g,'\n').replace(/\r/g,'\n');}
+function updateUI(){
+ $('level').style.width=Math.min(100,Math.sqrt(micEnergy)*9500)+'%';
+ if(tab==='fax')return setStatusFromDecoder();
+ if(!receiver)return;
+ const s=receiver.getStatus();
+ if(tab==='rtty'){
+  $('detectedTones').textContent=s.locked?'Toner: '+Math.round(s.low)+' / '+Math.round(s.high)+' Hz':'Søger efter toner …';
+  $('detectedPolarity').textContent=s.side?'Mark: '+(s.side==='low'?'lav':'høj')+' tone':'Polaritet: undersøger';
+  $('frames').textContent=s.valid+' tegn · '+s.invalid+' fejl';
+  $('rttyInfo').textContent=s.locked?(s.valid?'Afkoder tegn. ':'Toner fundet; afventer tegn. ')+`Spektralsikkerhed: ${s.confidence.toFixed(1)}×.`:'Lytter efter tonepar med '+$('shift').value+' Hz afstand …';
+  const el=$('decoded'),str=viewText(s.text);
+  if(el.textContent!==str){const atEnd=el.scrollHeight-el.scrollTop-el.clientHeight<70;el.textContent=str;if(atEnd)el.scrollTop=el.scrollHeight;}
+ }else $('navtexInfo').textContent=s.locked?`Toner ca. ${Math.round(s.low)} / ${Math.round(s.high)} Hz · tekstdekoder mangler`:'Søger efter tonepar med 170 Hz shift …';
+}
+function updateStations(){
+ const sel=$('station');sel.replaceChildren();
+ for(const [name,usb] of stations[tab]){
+  const o=document.createElement('option');o.value=usb;o.textContent=tab==='navtex'?`${name} · bærefrekvens`:`${name} · USB ${usb} kHz`;sel.append(o);
+ }
+ $('faxPanel').classList.toggle('hide',tab!=='fax');$('rttyPanel').classList.toggle('hide',tab!=='rtty');$('navtexPanel').classList.toggle('hide',tab!=='navtex');
+ $('tuning').textContent=tab==='fax'?'På ATS25: almindelig USB omkring 1,9 kHz under faxens bærefrekvens. Kan du kun indtaste hele kHz, brug BFO til finjustering. DWD: 120 LPM / IOC 576.':tab==='rtty'?'På ATS25: almindelig USB. Appen søger automatisk RTTY-tonerne – du behøver normalt ikke justere andet.':'NAVTEX bruger 100 baud/170 Hz. 518/490 kHz er bærefrekvenser, IKKE direkte USB-afstemning; din radio skal kunne modtage dem. Ingen sikkerhedsdekoder endnu.';
+ createReceiver(sourceRate/downStep);
+ if(tab==='fax'){createFax(sourceRate/downStep);}
+ updateUI();
+}
+async function chooseTab(next){
+ if(next===tab)return;
+ if(fileRunning||testRunning){say('Stop først den igangværende analyse.');return;}
+ if(live)await stopMic();tab=next;
+ for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
+ updateStations();say(tab.toUpperCase()+' klar');
+}
+for(const b of document.querySelectorAll('[data-tab]'))b.addEventListener('click',()=>chooseTab(b.dataset.tab));
+function configureRate(rate){
+ sourceRate=rate;downStep=Math.max(1,Math.round(rate/12000));downN=0;lp0=lp1=lp2=0;micEnergy=0;
+ createReceiver(rate/downStep);
+ if(tab==='fax'){createFax(rate/downStep);faxLines=[];faxCanvas.height=100;faxCtx.fillStyle='white';faxCtx.fillRect(0,0,600,100);}
+ updateUI();
+}
+function feedSource(x){
+ micEnergy=.9997*micEnergy+.0003*x*x;
+ // Three smooth low-pass stages ahead of decimation (~2.5 kHz useful passband).
+ const a=1-Math.exp(-2*Math.PI*2900/sourceRate);
+ lp0+=a*(x-lp0);lp1+=a*(lp0-lp1);lp2+=a*(lp1-lp2);
+ if(++downN<downStep)return;
+ downN=0;
+ if(tab==='fax')faxDecoder.push(lp2);
+ else receiver.push(lp2);
+}
+async function startMic(){
+ if(fileRunning||testRunning){say('Afslut først testen/lydfilen.');return;}
+ try{
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Ingen mikrofonadgang. Åbn din HTTPS-side i Safari.');
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
+  audioContext=new(window.AudioContext||window.webkitAudioContext)();await audioContext.resume();
+  configureRate(audioContext.sampleRate);
+  micSource=audioContext.createMediaStreamSource(stream);
+  micProcessor=audioContext.createScriptProcessor(2048,1,1);
+  micSource.connect(micProcessor);micProcessor.connect(audioContext.destination);
+  live=true;micProcessor.onaudioprocess=evt=>{
+   evt.outputBuffer.getChannelData(0).fill(0);
+   if(!live)return;
+   const data=evt.inputBuffer.getChannelData(0);
+   for(let i=0;i<data.length;i++)feedSource(data[i]);
+  };
+  $('start').disabled=true;$('stop').disabled=false;
+  uiTimer=setInterval(updateUI,250);
+  if('wakeLock' in navigator)navigator.wakeLock.request('screen').then(w=>{wakeLock=w}).catch(()=>{});
+  say('Mikrofon aktiv · '+tab.toUpperCase()+' · '+Math.round(audioContext.sampleRate)+' Hz');
+  $('diagnostic').textContent='Lyden behandles kun på din iPhone. Hold Safari åben og skærmen tændt.';
+ }catch(e){await stopMic();say('Mikrofonfejl: '+e.message);$('diagnostic').textContent='Åbn GitHub Pages-linket i Safari (HTTPS), og tillad mikrofonen i Safari-indstillinger.';}
+}
+async function stopMic(){
+ live=false;if(uiTimer){clearInterval(uiTimer);uiTimer=null;}
+ if(micProcessor){micProcessor.onaudioprocess=null;micProcessor.disconnect();micProcessor=null;}
+ if(micSource){micSource.disconnect();micSource=null;}
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+ if(audioContext){try{await audioContext.close()}catch{}audioContext=null;}
+ if(wakeLock){try{await wakeLock.release()}catch{}wakeLock=null;}
+ $('start').disabled=false;$('stop').disabled=true;updateUI();
+}
+$('start').onclick=startMic;$('stop').onclick=async()=>{await stopMic();say('Mikrofon stoppet')};
+$('newFax').onclick=()=>{resetFax();say('Nyt vejrkort klar')};
+$('manualFax').onclick=()=>{if(!faxDecoder)return;faxDecoder.startManual();$('manualFax').textContent='▶ Start kort nu';updateUI();};
+$('invert').onclick=()=>{faxInvert=!faxInvert;$('invert').textContent=faxInvert?'Normale farver':'Vend farver';redrawFax();};
+$('autoContrast').onclick=()=>{faxAutoContrast=!faxAutoContrast;$('autoContrast').textContent=faxAutoContrast?'Normal kontrast':'Auto kontrast';redrawFax();};
+for(const id of ['horizontal','skew'])$(id).addEventListener('input',()=>{$('skewValue').textContent='Hældning: '+$('skew').value;redrawFax()});
+for(const id of ['lpm','ioc'])$(id).addEventListener('change',()=>{resetFax();say('Indstilling ændret. Nyt kort klar.')});
+function setFaxOffset(){
+ $('faxManualOffset').disabled=$('faxTune').value!=='manual';
+ if(faxDecoder)faxDecoder.setOffsetHz($('faxTune').value==='manual'?Number($('faxManualOffset').value):null);
+ updateUI();
+}
+for(const id of ['faxTune','faxManualOffset'])$(id).addEventListener('change',setFaxOffset);
+for(const id of ['baud','shift','toneMode','toneLow'])$(id).addEventListener('change',()=>{
+ $('toneLow').disabled=$('toneMode').value!=='manual';
+ if(receiver&&tab==='rtty'){
+  receiver.setBaudShift(Number($('baud').value),Number($('shift').value));
+  receiver.polarity=$('polarity').value;receiver.setToneMode($('toneMode').value,Number($('toneLow').value)||346);
+  updateUI();
+ }
+});
+$('polarity').addEventListener('change',()=>{if(receiver)receiver.polarity=$('polarity').value;updateUI()});
+$('output').addEventListener('change',updateUI);
+$('clear').onclick=()=>{receiver?.clearText();$('decoded').textContent='';updateUI()};
+function downloadBlob(blob,filename){
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;
+ document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),12000);
+}
+$('saveText').onclick=()=>downloadBlob(new Blob([$('decoded').textContent],{type:'text/plain;charset=utf-8'}),'ATS25-RTTY-'+Date.now()+'.txt');
+$('saveFax').onclick=()=>{
+ if(!faxLines.length){say('Intet vejrkort endnu. Start en modtagelse først.');return;}
+ const c=document.createElement('canvas');c.width=600;c.height=faxLines.length;const cx=c.getContext('2d');
+ for(let r=0;r<faxLines.length;r++)renderFaxLine(faxLines[r],r,cx);
+ c.toBlob(blob=>{if(blob)downloadBlob(blob,'ATS25-WEFAX-'+Date.now()+'.png');else say('Kunne ikke gemme PNG.')},'image/png');
+};
+const nextFrame=()=>new Promise(r=>requestAnimationFrame(r));
+async function decodeFile(){
+ if(fileRunning||testRunning)return;
+ const f=$('recording').files?.[0];if(!f){say('Vælg først en lydfil.');return;}
+ if(live)await stopMic();fileRunning=true;fileAbort=false;$('decodeFile').disabled=true;$('cancelFile').disabled=false;
+ let ac=null;
+ try{
+  ac=new(window.AudioContext||window.webkitAudioContext)();
+  say('Åbner lydfilen: '+f.name);$('fileProgress').textContent='Ingen upload — hele filen analyseres lokalt.';
+  const b=await f.arrayBuffer(),sound=await ac.decodeAudioData(b);
+  configureRate(sound.sampleRate);
+  const c0=sound.getChannelData(0),c1=sound.numberOfChannels>1?sound.getChannelData(1):null,n=c0.length;
+  for(let i=0;i<n&&!fileAbort;i+=16000){const end=Math.min(i+16000,n);
+   for(let j=i;j<end;j++)feedSource(c1?(c0[j]+c1[j])*.5:c0[j]);
+   $('fileProgress').textContent=`${(end/sound.sampleRate).toFixed(1)} / ${sound.duration.toFixed(1)} sek · ${Math.round(end/n*100)} %`;
+   updateUI();await nextFrame();
+  }
+  updateUI();say(fileAbort?'Analyse afbrudt':`Lydfil behandlet. ${tab==='fax'?'Vejrkortlinjer: '+faxLines.length:'Se tekst/toneanalyse'}.`);
+ }catch(e){say('Kunne ikke læse lydfil: '+e.message+' · Prøv WAV eller M4A optaget med Memoer.');}
+ finally{if(ac)try{await ac.close()}catch{}fileRunning=false;$('decodeFile').disabled=false;$('cancelFile').disabled=true;}
+}
+$('decodeFile').onclick=decodeFile;$('cancelFile').onclick=()=>{fileAbort=true};
+// RTTY test from v0.3: actual synthesised ITA2/50-baud/450-Hz FSK, then decode.
+function synthBaudot(text){
+ const bitLen=12000/50,lo=345,hi=795,frames=[];let figure=false;
+ const emitCode=v=>{const b=[0];for(let i=0;i<5;i++)b.push((v>>i)&1);b.push(1,1);frames.push(b)};
+ for(let j=0;j<16;j++)emitCode(31);
+ for(const char0 of text.toUpperCase()){
+  const ch=char0==='\r'?'\r':char0,find=table=>table.findIndex(s=>s===ch),li=find(BAUDOT_LETTERS),fi=find(BAUDOT_FIGURES);
+  if(li<0&&fi<0)continue;
+  if(li>=0){if(figure){emitCode(31);figure=false;}emitCode(li);}
+  else{if(!figure){emitCode(27);figure=true;}emitCode(fi);}
+ }
+ const samples=[];let phase=0,state=0;
+ for(const bits of frames)for(let k=0;k<bits.length;k++){
+  const f=bits[k]?lo:hi;
+  for(let s=0;s<bitLen;s++){
+   phase+=2*Math.PI*f/12000;if(phase>2*Math.PI)phase-=2*Math.PI;
+   state=(state*1664525+1013904223)>>>0;
+   samples.push(.25*Math.sin(phase)+.012*(state/0xffffffff-.5));
+  }
+ }
+ return new Float32Array(samples);
+}
+async function testDecoder(){
+ if(fileRunning||testRunning)return;
+ if(live)await stopMic();testRunning=true;$('test').disabled=true;
+ try{
+  configureRate(12000);
+  if(tab==='rtty'){
+   const txt='CQ CQ CQ DE DDK2 DDH7 DDK9\r\nFREQUENCIES 4583 KHZ 7646 KHZ 10100.8 KHZ\r\n';
+   const sig=synthBaudot(txt);
+   for(let i=0;i<sig.length;i+=12000){for(let j=i;j<Math.min(sig.length,i+12000);j++)feedSource(sig[j]);updateUI();await nextFrame()}
+   say('RTTY-test færdig — afkodning af syntetisk radiolyd.');
+  }else if(tab==='fax'){
+   let phase=0,seed=19;
+   let px=0,synRow=0;const sr=12000;
+   const send=f=>{
+    phase+=Math.PI*2*(f+145)/sr;if(phase>Math.PI*2)phase-=Math.PI*2;
+    seed=(seed*1664525+1013904223)>>>0;
+    feedSource(.18*Math.sin(phase)+.015*(seed/4294967295-.5));
+   };
+   // APT-like 300 Hz black/white preamble, then phasing, then a genuine FSK image.
+   const wholeSeconds=6+4+32;
+   for(let secs=0;secs<wholeSeconds;secs++){
+    for(let j=0;j<sr;j++){
+     const t=secs+j/sr;let freq;
+     if(t<6)freq=(Math.floor(t*600)%2===0)?1500:2300;
+     else if(t<10){const frac=(t-6)*2;freq=(frac%1)<.05?2300:1500;}
+     else{
+      const row=Math.floor((t-10)*2),u=((t-10)*2)%1;
+      // Checkerboard, white blocks, stripes + a dark baseline, so data has identifiable features.
+      const box=(Math.floor(u*8)+Math.floor(row/8))%2;
+      freq=box===0?1500:2300;
+     }
+     send(freq);
+    }
+    if(secs%2===1){updateUI();await nextFrame();}
+   }
+   updateUI();say(`WEFAX-lydtest færdig: ${faxLines.length} billedlinjer genereret via dekoderen. Auto-korrektion testet med +145 Hz.`);
+  }else{say('NAVTEX har endnu ingen færdig tekstdekoder. Toneanalyse kan testes med en modtaget lydfil.');}
+ }catch(e){say('Testfejl: '+e.message);}
+ finally{testRunning=false;$('test').disabled=false;updateUI();}
+}
+$('test').onclick=testDecoder;
+// Optional SW only — app works even if user initially uploads only index.html.
+async function setupOffline(){
+ const el=$('offlineState');
+ if(!('serviceWorker' in navigator)){el.textContent='Offlineinstallation ikke understøttet af denne browser.';return;}
+ if(!/^https:/.test(location.protocol)){el.textContent='Offlineinstallation kræver GitHub Pages (HTTPS).';return;}
+ try{
+  const reg=await navigator.serviceWorker.register('./sw.js',{scope:'./'});
+  await navigator.serviceWorker.ready;
+  el.textContent='Offlinecache installeret. Test i flytilstand efter en genindlæsning; hold skærmen tændt under modtagelse.';
+  // Never block the core decoder on SW installation.
+ }catch(e){el.textContent='Offlinecache ikke installeret. Upload også sw.js til repositoryets hovedmappe for offlinebrug. Appen virker stadig online.';}
+}
+updateStations();configureRate(48000);initSpectrum('spectrum');initSpectrum('navSpectrum');
+setupOffline();
+
+</script>
+</body></html>
